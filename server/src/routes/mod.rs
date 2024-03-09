@@ -1,4 +1,4 @@
 mod filters;
-mod handlers;
+pub mod handlers;
 
 pub use filters::*;
