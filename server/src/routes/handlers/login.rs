@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 use crate::routes::*;
-use mysql::{params, prelude::Queryable, Pool, Row, Value};
+use mysql::{params, prelude::Queryable, Pool, Row};
 use std::env;
 use crate::utils;
 use rand_core::{RngCore, OsRng};
