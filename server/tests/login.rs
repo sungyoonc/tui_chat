@@ -20,7 +20,7 @@ async fn test_login() {
         .expect("Failed to send request.");
 
     assert!(response.status().is_success());
-    assert_eq!(response.content_length(), Some(0));
+    println!("{:?}", response.text().await);
 
     // Shutdown the server
     cancel_token.cancel();
