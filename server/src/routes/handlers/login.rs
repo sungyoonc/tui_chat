@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 use crate::routes::*;
-use lazy_static::lazy_static;
 use mysql::{params, prelude::Queryable, Pool, Row};
 use std::env;
 use crate::utils;
@@ -9,15 +8,27 @@ use chrono::{prelude::*, TimeDelta};
 use warp::http::StatusCode;
 
 static SESSION_EXPIRE_HOUR: i64 = 1;
-lazy_static! {
-    static ref POOL: Pool = Pool::new(format!("mysql://{}:{}@localhost:3306/{}", env::var("MYSQL_ID").unwrap(), env::var("MYSQL_PW").unwrap(), env::var("MYSQL_DB_NAME").unwrap()).as_str()).unwrap();
+
+struct Db {
+    pool: Pool
 }
+
+impl Db {
+    fn new() -> Db{
+        let id = env::var("MYSQL_ID").expect("No 'MYSQL_ID' env variable");
+        let pw = env::var("MYSQL_PW").expect("No 'MYSQL_PW' env variable");
+        let db_name = env::var("MYSQL_DB_NAME").expect("No 'MYSQL_DB_NAME' env variable");
+        let db_port = env::var("MYSQL_PORT").unwrap_or("3306".to_string());
+        Db {pool: Pool::new(format!("mysql://{}:{}@localhost:{}/{}", id, pw, db_port, db_name).as_str()).expect("Can't connect to mysql server")}
+    }    
+}
+
 
 pub async fn login(json_data: LoginData) -> Result<impl warp::Reply, Infallible> {
     let hashed_id = utils::hash_from_string(json_data.clone().id);
     let hashed_pw = utils::hash_from_string(json_data.pw);
 
-    let mut conn = POOL.get_conn().unwrap();
+    let mut conn = Db::new().pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT * FROM login WHERE id = :id AND pw= :pw", params! {"id" => hashed_id.clone(), "pw" => hashed_pw}).unwrap();
 
     if result.len() != 1 {
