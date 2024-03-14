@@ -30,3 +30,12 @@ pub fn db_setup() {
         session VARCHAR(64),
         expire VARCHAR(64),", ()).unwrap();
 }
+
+pub fn check_session(session: String) -> Option<String> {
+    let mut conn = Db::new().pool.get_conn().unwrap();
+    let result: Vec<Row> = conn.exec("SELECT id FROM session WHERE session = :session", params! {"session" => session}).unwrap();
+    if result.len() == 0 {
+        return None
+    }
+    mysql::from_row(result[0].clone())
+}
