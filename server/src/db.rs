@@ -1,4 +1,4 @@
-use mysql::{prelude::Queryable, Pool};
+use mysql::{prelude::Queryable, Pool, Row, params};
 use std::env;
 
 pub struct Db {
