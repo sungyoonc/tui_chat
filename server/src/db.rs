@@ -1,5 +1,6 @@
 use mysql::{prelude::Queryable, Pool, Row, params};
 use std::env;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Db {
     pub pool: Pool
@@ -27,16 +28,29 @@ pub fn db_setup() {
         refresh_token VARCHAR(64));", ()).unwrap();
     conn.exec::<Vec<_>, &str, ()>("
         CREATE TABLE IF NOT EXISTS session (
-        id VARCHAR(64),
+        id BIGINT UNSIGNED,
         session VARCHAR(64),
         expire BIGINT UNSIGNED)", ()).unwrap();
 }
 
-pub fn check_session(session: String) -> Option<String> {
+pub fn check_session(session: String) -> Option<u64> {
     let mut conn = Db::new().pool.get_conn().unwrap();
-    let result: Vec<Row> = conn.exec("SELECT id FROM session WHERE session = :session", params! {"session" => session}).unwrap();
+    let result: Vec<Row> = conn.exec("SELECT id, expire FROM session WHERE session = :session", params! {"session" => session.clone()}).unwrap();
+    
+    // check if session exists
     if result.len() == 0 {
         return None
     }
-    mysql::from_row(result[0].clone())
+    
+    // check if session is vaild
+    let (id, expire): (u64, u64) = mysql::from_row(result[0].clone());
+    let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    if current_time > expire {
+        // delete expired session
+        let mut conn = Db::new().pool.get_conn().unwrap();
+        let _result: Vec<Row> = conn.exec("DELETE FROM session WHERE session = :session", params! {"session" => session}).unwrap();
+        return None
+    }
+
+    return Some(id);
 }
