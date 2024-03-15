@@ -37,6 +37,19 @@ pub async fn login(json_data: LoginData) -> Result<Box<dyn warp::Reply>, Infalli
         return Ok(Box::new(StatusCode::UNAUTHORIZED))
     }
 
+    // check if user has expired session
+    let result: Vec<Row> = conn.exec("SELECT session, expire FROM session WHERE id = :id", params! {"id" => id.clone()}).unwrap();
+    if result.len() > 0 {
+        for row in result {
+            let (session, expire): (String, u64) = mysql::from_row(row);
+            let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+            if current_time > expire {
+                // delete expired session
+                let _result: Vec<Row> = conn.exec("DELETE FROM session WHERE session = :session", params! {"session" => session}).unwrap();
+            }
+        }
+    }
+
     // make session by hashing random number and id
     let mut key = OsRng.next_u64().to_le_bytes().to_vec();
     let mut session_source = id.clone().to_string().into_bytes();
