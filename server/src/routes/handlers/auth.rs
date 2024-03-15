@@ -1,17 +1,25 @@
-use std::convert::Infallible;
 use crate::routes::*;
-use mysql::{params, prelude::Queryable, Row};
 use crate::utils;
+use crate::db::Db;
+use std::convert::Infallible;
+use mysql::{params, prelude::Queryable, Row};
 use rand_core::{RngCore, OsRng};
 use warp::http::StatusCode;
-use crate::db::Db;
 use std::time::{SystemTime, UNIX_EPOCH};
+use serde::Serialize;
 
 static SESSION_REMEMBER_EXPIRE_HOUR: u64 = 24*7;
 static SESSION_NO_REMEMBER_EXPIRE_MINUTE: u64 = 30;
 static REFRESHED_SESSION_EXPIRE_HOUR: u64 = 24*7;
 
-pub async fn login(json_data: LoginData) -> Result<impl warp::Reply, Infallible> {
+// response format
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
+pub struct ResponseData {
+    session: String,
+    refresh_token: String,
+}
+
+pub async fn login(json_data: LoginData) -> Result<Box<dyn warp::Reply>, Infallible> {
     let username: String = json_data.clone().username;
     let pw = json_data.pw;
 
@@ -19,14 +27,14 @@ pub async fn login(json_data: LoginData) -> Result<impl warp::Reply, Infallible>
     let mut conn = Db::new().pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT id, salt, pw FROM login WHERE username = :username", params! {"username" => username.clone()}).unwrap();
     if result.len() == 0 {
-        return Ok(StatusCode::UNAUTHORIZED)
+        return Ok(Box::new(StatusCode::UNAUTHORIZED))
     }
 
     // check if user pw is correct
     let (id, salt, db_pw): (u64, String, String) = mysql::from_row(result[0].clone());
     let hashed_pw = utils::hash_from_string(format!("{}{}", pw, salt));
     if hashed_pw != db_pw {
-        return Ok(StatusCode::UNAUTHORIZED)
+        return Ok(Box::new(StatusCode::UNAUTHORIZED))
     }
 
     // make session by hashing random number and id
@@ -40,7 +48,7 @@ pub async fn login(json_data: LoginData) -> Result<impl warp::Reply, Infallible>
         false => SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 60*60*SESSION_NO_REMEMBER_EXPIRE_MINUTE,
     };
     // insert session to the session table
-    let _result: Vec<Row> = conn.exec("INSERT INTO session (id, session, expire) VALUES (:id, :session, :expire)", params! {"id" => id.clone(), "session" => session, "expire" => expire}).unwrap();
+    let _result: Vec<Row> = conn.exec("INSERT INTO session (id, session, expire) VALUES (:id, :session, :expire)", params! {"id" => id.clone(), "session" => session.clone(), "expire" => expire}).unwrap();
 
     // make refresh_toke by hashing random number and id
     let mut key = OsRng.next_u64().to_le_bytes().to_vec();
@@ -49,18 +57,23 @@ pub async fn login(json_data: LoginData) -> Result<impl warp::Reply, Infallible>
     let refresh_token = utils::hash_from_u8(refresh_token_source);
     
     // insert refresh_token to the login table
-    let _result: Vec<Row> = conn.exec("UPDATE login SET refresh_token = :refresh_token WHERE id = :id", params! {"refresh_token" => refresh_token, "id" => id}).unwrap();
+    let _result: Vec<Row> = conn.exec("UPDATE login SET refresh_token = :refresh_token WHERE id = :id", params! {"refresh_token" => refresh_token.clone(), "id" => id}).unwrap();
 
-    return Ok(StatusCode::OK)
+    // response
+    let response = ResponseData {
+        session: session,
+        refresh_token: refresh_token,
+    };
+    return Ok(Box::new(warp::reply::json(&response)))
 }
 
-pub async fn refresh(json_data: RefreshData) -> Result<impl warp::Reply, Infallible> {
+pub async fn refresh(json_data: RefreshData) -> Result<Box<dyn warp::Reply>, Infallible> {
     // check if the refresh token is valid
     let refresh_token = json_data.refresh_token;
     let mut conn = Db::new().pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT id FROM login WHERE refresh_token = :refresh_token", params! {"refresh_token" => refresh_token}).unwrap();
     if result.len() == 0 {
-        return Ok(StatusCode::UNAUTHORIZED)
+        return Ok(Box::new(StatusCode::UNAUTHORIZED))
     }
 
     // make session by hashing random number and id
@@ -72,7 +85,7 @@ pub async fn refresh(json_data: RefreshData) -> Result<impl warp::Reply, Infalli
     // make expire
     let expire = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + REFRESHED_SESSION_EXPIRE_HOUR * 3600;
     // insert new session to session table
-    let _result: Vec<Row> = conn.exec("INSERT INTO session (id, session, expire) VALUES (:id, :session, :expire)", params! {"id" => id.clone(), "session" => session, "expire" => expire}).unwrap();
+    let _result: Vec<Row> = conn.exec("INSERT INTO session (id, session, expire) VALUES (:id, :session, :expire)", params! {"id" => id.clone(), "session" => session.clone(), "expire" => expire}).unwrap();
 
     // update used refresh token to new refresh token
     let mut key = OsRng.next_u64().to_le_bytes().to_vec();
@@ -80,7 +93,12 @@ pub async fn refresh(json_data: RefreshData) -> Result<impl warp::Reply, Infalli
     refresh_token_source.append(&mut key);
     let refresh_token = utils::hash_from_u8(refresh_token_source);
     
-    let _result: Vec<Row> = conn.exec("UPDATE login SET refresh_token = :refresh_token WHERE id = :id", params! {"refresh_token" => refresh_token, "id" => id}).unwrap();
+    let _result: Vec<Row> = conn.exec("UPDATE login SET refresh_token = :refresh_token WHERE id = :id", params! {"refresh_token" => refresh_token.clone(), "id" => id}).unwrap();
 
-    Ok(StatusCode::OK)
+    // reponse
+    let response = ResponseData {
+        session: session,
+        refresh_token: refresh_token,
+    };
+    return Ok(Box::new(warp::reply::json(&response)))
 }

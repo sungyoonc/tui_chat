@@ -25,7 +25,7 @@ async fn test_login() {
         .send()
         .await
         .expect("Failed to send request.");
-    println!("Status Code: {}", response.status());
+
     assert!(response.status().is_success());
     println!("{:?}", response.text().await);
 
