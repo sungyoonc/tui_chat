@@ -8,7 +8,8 @@ use crate::routes;
 
 fn get_server(
 ) -> Server<impl warp::Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone> {
-    warp::serve(routes::apis())
+    let db = routes::DB::new();
+    warp::serve(routes::DB::apis(db))
 }
 
 pub fn run(listener: TcpListener) -> impl Future<Output = ()> {

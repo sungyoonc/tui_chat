@@ -1,6 +1,5 @@
 use crate::routes::*;
 use crate::utils;
-use crate::db::Db;
 use std::convert::Infallible;
 use mysql::{params, prelude::Queryable, Row};
 use rand_core::{RngCore, OsRng};
@@ -19,12 +18,12 @@ pub struct ResponseData {
     refresh_token: String,
 }
 
-pub async fn login(json_data: LoginData) -> Result<Box<dyn warp::Reply>, Infallible> {
+pub async fn login(json_data: LoginData, db: DB) -> Result<Box<dyn warp::Reply>, Infallible> {
     let username: String = json_data.clone().username;
     let pw = json_data.pw;
 
     // get salt and pw from login table
-    let mut conn = Db::new().pool.get_conn().unwrap();
+    let mut conn = db.pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT id, salt, pw FROM login WHERE username = :username", params! {"username" => username.clone()}).unwrap();
     if result.len() == 0 {
         return Ok(Box::new(StatusCode::UNAUTHORIZED))
@@ -80,10 +79,10 @@ pub async fn login(json_data: LoginData) -> Result<Box<dyn warp::Reply>, Infalli
     return Ok(Box::new(warp::reply::json(&response)))
 }
 
-pub async fn refresh(json_data: RefreshData) -> Result<Box<dyn warp::Reply>, Infallible> {
+pub async fn refresh(json_data: RefreshData, db: DB) -> Result<Box<dyn warp::Reply>, Infallible> {
     // check if the refresh token is valid
     let refresh_token = json_data.refresh_token;
-    let mut conn = Db::new().pool.get_conn().unwrap();
+    let mut conn = db.pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT id FROM login WHERE refresh_token = :refresh_token", params! {"refresh_token" => refresh_token}).unwrap();
     if result.len() == 0 {
         return Ok(Box::new(StatusCode::UNAUTHORIZED))
