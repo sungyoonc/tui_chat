@@ -20,15 +20,16 @@ pub fn db_setup() {
     let mut conn = db.pool.get_conn().unwrap();
     conn.exec::<Vec<_>, &str, ()>("
         CREATE TABLE IF NOT EXISTS login (
-        id VARCHAR(64),
+        id BIGINT UNSIGNED PRIMARY KEY,
+        username VARCHAR(32) UNIQUE KEY,
         pw VARCHAR(64),
         salt VARCHAR(64),
-        );", ()).unwrap();
+        refresh_token VARCHAR(64));", ()).unwrap();
     conn.exec::<Vec<_>, &str, ()>("
         CREATE TABLE IF NOT EXISTS session (
         id VARCHAR(64),
         session VARCHAR(64),
-        expire VARCHAR(64),", ()).unwrap();
+        expire BIGINT UNSIGNED)", ()).unwrap();
 }
 
 pub fn check_session(session: String) -> Option<String> {

@@ -1,5 +1,5 @@
 mod health_check;
-mod login;
+pub mod auth;
 
 pub use health_check::*;
-pub use login::*;
+pub use auth::*;
