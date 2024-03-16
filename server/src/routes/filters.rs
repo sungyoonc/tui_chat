@@ -24,8 +24,10 @@ pub struct Api {
 
 impl Api {
     pub fn new(settings: Settings) -> Self {
+        let database = Database::new(&settings.database);
+        database.db_setup();
         Self {
-            database: Database::new(&settings.database),
+            database,
             settings,
         }
     }
