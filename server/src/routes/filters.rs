@@ -1,6 +1,7 @@
+use crate::configuration::Settings;
+use crate::db::Database;
 use crate::routes::handlers;
-use crate::db::Db;
-use mysql::Pool;
+
 use serde::{Deserialize, Serialize};
 use warp::Filter;
 
@@ -17,13 +18,15 @@ pub struct RefreshData {
 }
 
 pub struct Api {
-    pool: Pool,
+    pub database: Database,
+    settings: Settings,
 }
 
 impl Api {
-    pub fn new() -> Self {
+    pub fn new(settings: Settings) -> Self {
         Self {
-            pool: Db::new().pool,
+            database: Database::new(&settings.database),
+            settings,
         }
     }
 
@@ -61,9 +64,9 @@ impl Api {
         prefix.and(login.or(refresh))
     }
 
-    fn with_db(&self) -> impl Filter<Extract = (Pool,), Error = std::convert::Infallible> + Clone {
-        let db_pool = self.pool.clone();
-        warp::any().map(move || db_pool.clone())
+    fn with_db(&self) -> impl Filter<Extract = (Database,), Error = std::convert::Infallible> + Clone {
+        let database = self.database.clone();
+        warp::any().map(move || database.clone())
     }
 }
 

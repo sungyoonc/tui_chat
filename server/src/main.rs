@@ -1,17 +1,27 @@
+use tui_chat_server::configuration::get_configuration;
+use tui_chat_server::startup;
+
 use tokio::{net::TcpListener, signal};
 use tokio_util::sync::CancellationToken;
-use tui_chat_server::startup;
 
 #[tokio::main]
 async fn main() {
-    let listener = TcpListener::bind("127.0.0.1:8000").await.unwrap();
+    let settings = get_configuration().expect("Failed to read configuration.");
+
+    let listener = TcpListener::bind((settings.bind.addr, settings.bind.port))
+        .await
+        .unwrap();
 
     let cancel_token = CancellationToken::new();
     let cloned_cancel_token = cancel_token.clone();
 
-    let server = startup::run_with_graceful_shutdown(listener, async move {
-        cloned_cancel_token.cancelled().await;
-    });
+    let server = startup::run_with_graceful_shutdown(
+        listener,
+        async move {
+            cloned_cancel_token.cancelled().await;
+        },
+        settings.clone(),
+    );
 
     let server_task = tokio::spawn(server);
 
