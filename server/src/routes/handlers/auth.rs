@@ -8,9 +8,9 @@ use warp::http::StatusCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
-static SESSION_REMEMBER_EXPIRE_HOUR: u64 = 24*7;
-static SESSION_NO_REMEMBER_EXPIRE_MINUTE: u64 = 30;
-static REFRESHED_SESSION_EXPIRE_HOUR: u64 = 24*7;
+const SESSION_REMEMBER_EXPIRE_HOUR: u64 = 24*7;
+const SESSION_NO_REMEMBER_EXPIRE_MINUTE: u64 = 30;
+const REFRESHED_SESSION_EXPIRE_HOUR: u64 = 24*7;
 
 // response format
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
