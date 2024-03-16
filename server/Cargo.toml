@@ -12,9 +12,7 @@ path = "src/main.rs"
 name = "tui-chat-server"
 
 [dependencies]
-chrono = "0.4.35"
 config = "0.14"
-http = "1.1.0"
 mysql = "24.0.0"
 rand_core = "0.6.4"
 serde = { version = "1.0.197", features = ["derive"] }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::configuration::Settings;
 use crate::db::Database;
 use crate::routes::handlers;
@@ -36,7 +34,6 @@ impl warp::reject::Reject for ApiError {}
 
 pub struct Api {
     pub database: Database,
-    settings: Settings,
 }
 
 impl Api {
@@ -45,7 +42,6 @@ impl Api {
         database.db_setup();
         Self {
             database,
-            settings,
         }
     }
 
