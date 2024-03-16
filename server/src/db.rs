@@ -16,7 +16,7 @@ impl Database {
         let port = settings.port;
         let name = &settings.name;
 
-        Database {
+        Self {
             pool: Pool::new(
                 format!("mysql://{}:{}@{}:{}/{}", id, pw, hostname, port, name).as_str(),
             )
