@@ -4,12 +4,12 @@ use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use warp::Server;
 
-use crate::routes;
+use crate::routes::Api;
 
 fn get_server(
 ) -> Server<impl warp::Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone> {
-    let db = routes::DB::new();
-    warp::serve(routes::DB::apis(db))
+    let api = Api::new();
+    warp::serve(api.routes())
 }
 
 pub fn run(listener: TcpListener) -> impl Future<Output = ()> {
