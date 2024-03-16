@@ -1,10 +1,11 @@
 use crate::db::Database;
+use crate::routes::ApiError;
 use crate::routes::*;
 use crate::utils;
-use std::convert::Infallible;
+
 use mysql::{params, prelude::Queryable, Row};
 use rand_core::{RngCore, OsRng};
-use warp::http::StatusCode;
+use warp::reject::Rejection;
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
@@ -19,7 +20,7 @@ pub struct ResponseData {
     refresh_token: String,
 }
 
-pub async fn login(json_data: LoginData, database: Database) -> Result<Box<dyn warp::Reply>, Infallible> {
+pub async fn login(json_data: LoginData, database: Database) -> Result<impl warp::Reply, Rejection> {
     let username: String = json_data.clone().username;
     let pw = json_data.pw;
 
@@ -27,14 +28,14 @@ pub async fn login(json_data: LoginData, database: Database) -> Result<Box<dyn w
     let mut conn = database.pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT id, salt, pw FROM login WHERE username = :username", params! {"username" => username.clone()}).unwrap();
     if result.len() == 0 {
-        return Ok(Box::new(StatusCode::UNAUTHORIZED))
+        return Err(warp::reject::custom(ApiError::NotAuthorized))
     }
 
     // check if user pw is correct
     let (id, salt, db_pw): (u64, String, String) = mysql::from_row(result[0].clone());
     let hashed_pw = utils::hash_from_string(format!("{}{}", pw, salt));
     if hashed_pw != db_pw {
-        return Ok(Box::new(StatusCode::UNAUTHORIZED))
+        return Err(warp::reject::custom(ApiError::NotAuthorized))
     }
 
     // check if user has expired session
@@ -77,16 +78,17 @@ pub async fn login(json_data: LoginData, database: Database) -> Result<Box<dyn w
         session: session,
         refresh_token: refresh_token,
     };
-    return Ok(Box::new(warp::reply::json(&response)))
+
+    return Ok(warp::reply::json(&response));
 }
 
-pub async fn refresh(json_data: RefreshData, database: Database) -> Result<Box<dyn warp::Reply>, Infallible> {
+pub async fn refresh(json_data: RefreshData, database: Database) -> Result<impl warp::Reply, Rejection> {
     // check if the refresh token is valid
     let refresh_token = json_data.refresh_token;
     let mut conn = database.pool.get_conn().unwrap();
     let result: Vec<Row> = conn.exec("SELECT id FROM login WHERE refresh_token = :refresh_token", params! {"refresh_token" => refresh_token}).unwrap();
     if result.len() == 0 {
-        return Ok(Box::new(StatusCode::UNAUTHORIZED))
+        return Err(warp::reject::custom(ApiError::NotAuthorized))
     }
 
     // make session by hashing random number and id
@@ -113,5 +115,5 @@ pub async fn refresh(json_data: RefreshData, database: Database) -> Result<Box<d
         session: session,
         refresh_token: refresh_token,
     };
-    return Ok(Box::new(warp::reply::json(&response)))
+    return Ok(warp::reply::json(&response));
 }

@@ -1,8 +1,12 @@
+use std::collections::HashMap;
+
 use crate::configuration::Settings;
 use crate::db::Database;
 use crate::routes::handlers;
 
 use serde::{Deserialize, Serialize};
+use warp::hyper::{Response, StatusCode};
+use warp::reply::Reply;
 use warp::Filter;
 
 #[derive(Clone, Deserialize)]
@@ -16,6 +20,19 @@ pub struct LoginData {
 pub struct RefreshData {
     pub refresh_token: String,
 }
+
+#[derive(Serialize)]
+struct RejectionDetails {
+    title: String,
+    status: u16,
+}
+
+#[derive(Debug)]
+pub enum ApiError {
+    NotAuthorized,
+}
+
+impl warp::reject::Reject for ApiError {}
 
 pub struct Api {
     pub database: Database,
@@ -34,8 +51,10 @@ impl Api {
 
     pub fn routes(
         &self,
-    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-        self.health_check().or(self.auth())
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = std::convert::Infallible> + Clone {
+        self.health_check()
+            .or(self.auth())
+            .recover(Self::handle_rejection)
     }
 
     pub fn health_check(
@@ -66,7 +85,45 @@ impl Api {
         prefix.and(login.or(refresh))
     }
 
-    fn with_db(&self) -> impl Filter<Extract = (Database,), Error = std::convert::Infallible> + Clone {
+    pub async fn handle_rejection(
+        err: warp::Rejection,
+    ) -> Result<impl warp::Reply, std::convert::Infallible> {
+        let status: StatusCode;
+        let title: &str;
+
+        if err.is_not_found() {
+            title = "Not Found";
+            status = StatusCode::NOT_FOUND;
+        } else if err
+            .find::<warp::filters::body::BodyDeserializeError>()
+            .is_some()
+        {
+            // When the body could not be deserialized correctly
+            title = "Bad Request";
+            status = StatusCode::BAD_REQUEST;
+        } else {
+            title = "Unhandled Rejection";
+            status = StatusCode::INTERNAL_SERVER_ERROR;
+        }
+
+        let json = RejectionDetails {
+            title: title.to_string(),
+            status: status.as_u16(),
+        };
+
+        let res = Response::builder()
+            .status(status)
+            .header(warp::http::header::CONTENT_TYPE, "application/problem+json")
+            .body(warp::hyper::Body::from(
+                serde_json::to_vec(&json).expect("Failed to serialize rejeciton details."),
+            ))
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR.into_response());
+        Ok(res)
+    }
+
+    fn with_db(
+        &self,
+    ) -> impl Filter<Extract = (Database,), Error = std::convert::Infallible> + Clone {
         let database = self.database.clone();
         warp::any().map(move || database.clone())
     }

@@ -9,7 +9,7 @@ use crate::routes::Api;
 
 fn get_server(
     settings: Settings,
-) -> Server<impl warp::Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone> {
+) -> Server<impl warp::Filter<Extract = (impl warp::Reply,), Error = std::convert::Infallible> + Clone> {
     let api = Api::new(settings);
     warp::serve(api.routes())
 }
