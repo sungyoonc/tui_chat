@@ -239,8 +239,7 @@ pub async fn signup(
     salt_source.append(&mut key);
     let salt = utils::hash_from_u8(salt_source);
     let hashed_pw = utils::hash_from_string(format!("{}{}", pw, salt));
-    let _result: Vec<Row> = conn
-        .exec(
+    conn.exec::<Row, _, _>(
             "INSERT INTO login (salt, pw, username) VALUES (:salt, :pw, :username)",
             params! {"salt" => salt, "pw" => hashed_pw, "username" => username},
         )
