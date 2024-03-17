@@ -69,6 +69,7 @@ impl Database {
                 params! {"session" => session.clone()},
             )
             .unwrap();
+        drop(conn);
 
         // check if session exists
         if result.is_empty() {
@@ -83,18 +84,7 @@ impl Database {
             .as_secs();
         if current_time > expire {
             if current_time > refresh_expire {
-                // delete expired session
-                conn.exec::<Row, _, _>(
-                    "DELETE FROM session WHERE session = :session",
-                    params! {"session" => session.clone()},
-                )
-                .unwrap();
-                // delete associated chat_tokens
-                conn.exec::<Row, _, _>(
-                    "DELETE FROM chat_token WHERE session = :session",
-                    params! {"session" => session},
-                )
-                .unwrap();
+                self.delete_session(session).await;
             }
             return None;
         }
@@ -183,5 +173,21 @@ impl Database {
             username,
             channel,
         })
+    }
+
+    pub async fn delete_session(&self, session: String) {
+        let mut conn = self.pool.get_conn().unwrap();
+        // delete expired session
+        conn.exec::<Row, _, _>(
+            "DELETE FROM session WHERE session = :session",
+            params! {"session" => session.clone()},
+        )
+        .unwrap();
+        // delete associated chat_tokens
+        conn.exec::<Row, _, _>(
+            "DELETE FROM chat_token WHERE session = :session",
+            params! {"session" => session},
+        )
+        .unwrap();
     }
 }

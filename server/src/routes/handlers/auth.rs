@@ -53,6 +53,8 @@ pub async fn login(
             params! {"id" => id},
         )
         .unwrap();
+    drop(conn);
+
     if result.is_empty() {
         for row in result {
             let (session, refresh_expire): (String, u64) = mysql::from_row(row);
@@ -61,18 +63,7 @@ pub async fn login(
                 .unwrap()
                 .as_secs();
             if current_time > refresh_expire {
-                // delete expired session
-                conn.exec::<Row, _, _>(
-                    "DELETE FROM session WHERE session = :session",
-                    params! {"session" => session.clone()},
-                )
-                // delete associated chat_tokens
-                .unwrap();
-                conn.exec::<Row, _, _>(
-                    "DELETE FROM chat_token WHERE session = :session",
-                    params! {"session" => session},
-                )
-                .unwrap();
+                database.delete_session(session).await;
             }
         }
     }
@@ -102,6 +93,7 @@ pub async fn login(
             false => 60 * 60 * REFRESH_NO_REMEMBER_EXPIRE_HOUR,
         };
     // insert session to the session table
+    let mut conn = database.pool.get_conn().unwrap();
     conn.exec::<Row, _, _>(
         "INSERT INTO session (session, id, is_remember, expire, refresh_token, refresh_expire)
         VALUES (:session, :id, :is_remember, :expire, :refresh_token, :refresh_expire)",
@@ -263,13 +255,7 @@ pub async fn logout(
     let session = json_data.clone().session;
 
     // delete session in the database
-    let mut conn = database.pool.get_conn().unwrap();
-    let _result: Vec<Row> = conn
-        .exec(
-            "DELETE FROM session WHERE session = :session",
-            params! {"session" => session},
-        )
-        .unwrap();
+    database.delete_session(session).await;
 
     Ok(warp::reply())
 }
