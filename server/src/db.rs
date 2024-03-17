@@ -46,7 +46,8 @@ impl Database {
         )
         .unwrap();
     }
-    pub fn check_session(&self, session: String) -> Option<u64> {
+
+    pub async fn check_session(&self, session: String) -> Option<u64> {
         let mut conn = self.pool.get_conn().unwrap();
         let result: Vec<Row> = conn
             .exec(
@@ -56,7 +57,7 @@ impl Database {
             .unwrap();
 
         // check if session exists
-        if result.len() == 0 {
+        if result.is_empty() {
             return None;
         }
 
