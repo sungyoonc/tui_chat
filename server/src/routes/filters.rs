@@ -244,7 +244,7 @@ impl Api {
                     status = StatusCode::UNAUTHORIZED;
                 }
                 ApiError::NotProcessable(invalid_params_vec) => {
-                    title = "";
+                    title = "Conflict";
                     status = StatusCode::CONFLICT;
                     invalid_params.extend(invalid_params_vec.clone());
                 }
