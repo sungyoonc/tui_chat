@@ -25,6 +25,11 @@ pub struct SignupData {
     pub pw: String,
 }
 
+#[derive(Clone, Deserialize)]
+pub struct LogoutData {
+    pub session: String,
+}
+
 #[derive(Serialize)]
 struct RejectionDetails {
     title: String,
@@ -89,7 +94,13 @@ impl Api {
             .and(self.with_db())
             .and_then(handlers::auth::signup);
 
-        prefix.and(login.or(refresh).or(signup))
+        let logout = warp::path("logout")
+            .and(warp::post())
+            .and(logout_data_json_body())
+            .and(self.with_db())
+            .and_then(handlers::auth::logout);
+
+        prefix.and(login.or(refresh).or(signup).or(logout))
     }
 
     pub async fn handle_rejection(
@@ -146,6 +157,11 @@ fn refresh_data_json_body() -> impl Filter<Extract = (RefreshData,), Error = war
 }
 
 fn signup_data_json_body() -> impl Filter<Extract = (SignupData,), Error = warp::Rejection> + Clone
+{
+    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
+}
+
+fn logout_data_json_body() -> impl Filter<Extract = (LogoutData,), Error = warp::Rejection> + Clone
 {
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }

@@ -217,3 +217,21 @@ pub async fn signup(
 
     Ok(warp::reply())
 }
+
+pub async fn logout(
+    json_data: LogoutData,
+    database: Database,
+) -> Result<impl warp::Reply, Rejection> {
+    let session = json_data.clone().session;
+
+    // delete session in the database
+    let mut conn = database.pool.get_conn().unwrap();
+    let _result: Vec<Row> = conn
+        .exec(
+            "DELETE FROM session WHERE session = :session",
+            params! {"session" => session},
+        )
+        .unwrap();
+
+    Ok(warp::reply())
+}
