@@ -3,7 +3,7 @@ use crate::db::Database;
 use crate::models::chat::Connections;
 use crate::routes::handlers;
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
 use warp::hyper::{Response, StatusCode};
 use warp::reply::Reply;
@@ -118,25 +118,25 @@ impl Api {
 
         let login = warp::path("login")
             .and(warp::post())
-            .and(login_data_json_body())
+            .and(json_body::<LoginData>())
             .and(self.with_db())
             .and_then(handlers::auth::login);
 
         let refresh = warp::path("refresh")
             .and(warp::post())
-            .and(refresh_data_json_body())
+            .and(json_body::<RefreshData>())
             .and(self.with_db())
             .and_then(handlers::auth::refresh);
 
         let signup = warp::path("signup")
             .and(warp::post())
-            .and(signup_data_json_body())
+            .and(json_body::<SignupData>())
             .and(self.with_db())
             .and_then(handlers::auth::signup);
 
         let logout = warp::path("logout")
             .and(warp::post())
-            .and(logout_data_json_body())
+            .and(json_body::<LogoutData>())
             .and(self.with_db())
             .and_then(handlers::auth::logout);
 
@@ -292,22 +292,7 @@ impl Api {
     }
 }
 
-// TODO: change this to generic
-fn login_data_json_body() -> impl Filter<Extract = (LoginData,), Error = warp::Rejection> + Clone {
-    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
-}
-
-fn refresh_data_json_body() -> impl Filter<Extract = (RefreshData,), Error = warp::Rejection> + Clone
-{
-    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
-}
-
-fn signup_data_json_body() -> impl Filter<Extract = (SignupData,), Error = warp::Rejection> + Clone
-{
-    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
-}
-
-fn logout_data_json_body() -> impl Filter<Extract = (LogoutData,), Error = warp::Rejection> + Clone
-{
+fn json_body<T: DeserializeOwned + Send + 'static>(
+) -> impl Filter<Extract = (T,), Error = warp::Rejection> + Clone {
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }
