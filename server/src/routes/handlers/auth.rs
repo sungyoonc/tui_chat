@@ -134,7 +134,8 @@ pub async fn refresh(
         return Err(warp::reject::custom(ApiError::NotAuthorized));
     }
 
-    let (id, old_session, is_remember, refresh_expire): (String, String, bool, u64) = mysql::from_row(result[0].clone());
+    let (id, old_session, is_remember, refresh_expire): (String, String, bool, u64) =
+        mysql::from_row(result[0].clone());
 
     // Delete old session regardless of validity
     conn.exec::<Row, _, _>(
