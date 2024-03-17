@@ -104,10 +104,10 @@ pub async fn login(
     // insert session to the session table
     conn.exec::<Row, _, _>(
         "INSERT INTO session (session, id, is_remember, expire, refresh_token, refresh_expire)
-        VALUES (:session, :id, :is_remember :expire, :refresh_token :refresh_expire)",
+        VALUES (:session, :id, :is_remember, :expire, :refresh_token, :refresh_expire)",
         params! {
-            "id" => id,
             "session" => session.clone(),
+            "id" => id,
             "is_remember" => json_data.remember,
             "expire" => expire,
             "refresh_token" => refresh_token.clone(),
@@ -187,14 +187,14 @@ pub async fn refresh(
     // insert session to the session table
     conn.exec::<Row, _, _>(
         "INSERT INTO session (session, id, is_remember, expire, refresh_token, refresh_expire)
-        VALUES (:session, :id, :is_remember :expire, :refresh_token :refresh_expire)",
+        VALUES (:session, :id, :is_remember, :expire, :refresh_token, :refresh_expire)",
         params! {
-            "id" => id,
             "session" => session.clone(),
+            "id" => id,
             "is_remember" => is_remember,
             "expire" => expire,
             "refresh_token" => refresh_token.clone(),
-            "refresh_expire" => refresh_expire
+            "refresh_expire" => refresh_expire,
         },
     )
     .unwrap();

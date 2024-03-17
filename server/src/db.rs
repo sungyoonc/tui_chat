@@ -126,11 +126,13 @@ impl Database {
             .exec(
                 r"
                 SELECT
-                  s.id, s.username, t.is_used, t.channel, s.expire, t.expire 
+                  s.id, l.username, t.is_used, t.channel, s.expire, t.expire
                 FROM chat_token t
                 JOIN session s
                   ON t.session = s.session
-                    AND t.chat_token = :chat_token;",
+                    AND t.chat_token = :chat_token
+                JOIN login l
+                  ON s.id = l.id;",
                 params! {"chat_token" => chat_token.clone()},
             )
             .unwrap();
@@ -138,11 +140,11 @@ impl Database {
             return None;
         }
 
-        let (id, username, channel, is_used, session_expire, chat_token_expire): (
+        let (id, username, is_used, channel, session_expire, chat_token_expire): (
             u64,
             String,
-            u64,
             bool,
+            u64,
             u64,
             u64,
         ) = mysql::from_row(result[0].clone());

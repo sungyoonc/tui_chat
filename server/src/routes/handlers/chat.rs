@@ -37,8 +37,8 @@ pub async fn chat_token(
 
     conn.exec::<Row, _, _>(
         r"
-            INESRT INTO chat_token (chat_token, expire, channel, session, is_used)
-            VALUES(:chat_token, :expire, :channel, :session: :is_used)",
+            INSERT INTO chat_token (chat_token, expire, channel, session, is_used)
+            VALUES(:chat_token, :expire, :channel, :session, :is_used)",
         params! {
             "chat_token" => chat_token.clone(),
             "expire" => expire,
