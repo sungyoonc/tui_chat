@@ -3,6 +3,18 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
 use warp::ws::Message;
 
+#[derive(Debug, Serialize)]
+pub struct ChatTokenResponse {
+    pub chat_token: String,
+}
+
+pub struct ChatTokenInfo {
+    pub token: String,
+    pub id: u64,
+    pub username: String,
+    pub channel: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum MessageKind {
@@ -51,4 +63,4 @@ impl Connection {
     }
 }
 
-pub type Connections = Arc<RwLock<HashMap<u64, Connection>>>; // id, User
+pub type Connections = Arc<RwLock<HashMap<String, Connection>>>; // id, User

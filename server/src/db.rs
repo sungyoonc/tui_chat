@@ -2,6 +2,7 @@ use mysql::{params, prelude::Queryable, Pool, Row};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::configuration::DatabaseSettings;
+use crate::models::chat::ChatTokenInfo;
 
 #[derive(Clone)]
 pub struct Database {
@@ -47,6 +48,17 @@ impl Database {
             (),
         )
         .unwrap();
+        conn.exec::<Vec<_>, &str, ()>(
+            "
+        CREATE TABLE IF NOT EXISTS chat_token (
+        chat_token VARCHAR(64) PRIMARY KEY,
+        expire BIGINT UNSIGNED,
+        channel VARCHAR(64),
+        session VARCHAR(64),
+        is_used BOOLEAN);",
+            (),
+        )
+        .unwrap();
     }
 
     pub async fn check_session(&self, session: String) -> Option<u64> {
@@ -70,10 +82,16 @@ impl Database {
             .unwrap()
             .as_secs();
         if current_time > expire {
-            // delete expired session
             if current_time > refresh_expire {
+                // delete expired session
                 conn.exec::<Row, _, _>(
                     "DELETE FROM session WHERE session = :session",
+                    params! {"session" => session.clone()},
+                )
+                .unwrap();
+                // delete associated chat_tokens
+                conn.exec::<Row, _, _>(
+                    "DELETE FROM chat_token WHERE session = :session",
                     params! {"session" => session},
                 )
                 .unwrap();
@@ -100,5 +118,68 @@ impl Database {
         let username: String = mysql::from_row(result[0].clone());
 
         Some(username)
+    }
+
+    pub async fn check_chat_token(&self, chat_token: String) -> Option<ChatTokenInfo> {
+        let mut conn = self.pool.get_conn().unwrap();
+        let result: Vec<Row> = conn
+            .exec(
+                r"
+                SELECT
+                  s.id, s.username, t.is_used, t.channel, s.expire, t.expire 
+                FROM chat_token t
+                JOIN session s
+                  ON t.session = s.session
+                    AND t.chat_token = :chat_token;",
+                params! {"chat_token" => chat_token.clone()},
+            )
+            .unwrap();
+        if result.is_empty() {
+            return None;
+        }
+
+        let (id, username, channel, is_used, session_expire, chat_token_expire): (
+            u64,
+            String,
+            u64,
+            bool,
+            u64,
+            u64,
+        ) = mysql::from_row(result[0].clone());
+
+        if is_used {
+            return None;
+        }
+
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        if current_time > session_expire {
+            return None;
+        }
+
+        if current_time > chat_token_expire {
+            conn.exec::<Row, _, _>(
+                r"DELETE FROM chat_token WHERE expire < :current_time",
+                params! {"current_time" => current_time},
+            )
+            .unwrap();
+            return None;
+        }
+
+        conn.exec::<Row, _, _>(
+            "UPDATE chat_token SET is_used=TRUE WHERE chat_token=:chat_token",
+            params! {"chat_token" => chat_token.clone()},
+        )
+        .unwrap();
+
+        Some(ChatTokenInfo {
+            token: chat_token,
+            id,
+            username,
+            channel,
+        })
     }
 }

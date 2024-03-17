@@ -44,8 +44,20 @@ impl InvalidParamsDetail {
     }
 }
 
+#[derive(Clone)]
+pub struct AuthDetail {
+    pub id: u64,
+    pub session: String,
+}
+
+impl AuthDetail {
+    fn new(id: u64, session: String) -> Self {
+        Self { id, session }
+    }
+}
+
 #[derive(Debug, Serialize)]
-struct RejectionDetails {
+struct RejectionDetail {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     problem_type: Option<String>,
     title: String,
@@ -136,6 +148,29 @@ impl Api {
     ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
         let prefix = warp::path("chat");
 
+        let token = warp::path!("token")
+            .and(warp::get())
+            .and(self.ensure_authentication().await)
+            .and(self.with_db())
+            .and(warp::query::<HashMap<String, String>>())
+            .and_then(
+                |auth: AuthDetail, database: Database, query: HashMap<String, String>| async move {
+                    let channel = match query.get("channel") {
+                        Some(channel) => channel,
+                        None => {
+                            return Err(warp::reject::custom(ApiError::InvalidQuery));
+                        }
+                    };
+                    let channel = match channel.parse::<u64>() {
+                        Ok(channel) => channel,
+                        Err(_) => {
+                            return Err(warp::reject::custom(ApiError::InvalidQuery));
+                        }
+                    };
+                    handlers::chat::chat_token(auth, database, channel).await
+                },
+            );
+
         let ws = warp::path!("ws")
             .and(warp::query::<HashMap<String, String>>())
             .and(warp::ws())
@@ -152,48 +187,34 @@ impl Api {
                             return Err(warp::reject::custom(ApiError::NotAuthorized));
                         }
                     };
-                    let id = match database.check_session(token.clone()).await {
-                        Some(id) => id,
+                    let token_info = match database.check_chat_token(token.clone()).await {
+                        Some(token_info) => token_info,
                         None => {
                             return Err(warp::reject::custom(ApiError::NotAuthorized));
                         }
                     };
 
-                    let channel = match query.get("channel") {
-                        Some(channel) => channel,
-                        None => {
-                            return Err(warp::reject::custom(ApiError::InvalidQuery));
-                        }
-                    };
-                    let channel = match channel.parse::<u64>() {
-                        Ok(channel) => channel,
-                        Err(_) => {
-                            return Err(warp::reject::custom(ApiError::InvalidQuery));
-                        }
-                    };
-
                     let res = ws.on_upgrade(move |socket| {
-                        handlers::chat::ws(socket, connections, database, id, channel)
+                        handlers::chat::ws(socket, connections, database, token_info)
                     });
                     Ok(res)
                 },
             );
-        prefix.and(ws)
+        prefix.and(ws.or(token))
     }
 
     pub async fn ensure_authentication(
         &self,
-    ) -> impl Filter<Extract = (u64,), Error = warp::Rejection> + Clone {
+    ) -> impl Filter<Extract = (AuthDetail,), Error = warp::Rejection> + Clone {
         self.with_db()
             .and(warp::header::optional::<String>("Authorization"))
             .and_then(
                 |database: Database, auth_header: Option<String>| async move {
                     if let Some(token) = auth_header {
-                        if let Some(id) = database.check_session(token).await {
-                            return Ok(id);
+                        if let Some(id) = database.check_session(token.clone()).await {
+                            return Ok(AuthDetail::new(id, token));
                         }
                     }
-
                     Err(warp::reject::custom(ApiError::NotAuthorized))
                 },
             )
@@ -237,7 +258,7 @@ impl Api {
             status = StatusCode::INTERNAL_SERVER_ERROR;
         }
 
-        let json = RejectionDetails {
+        let json = RejectionDetail {
             title: title.to_string(),
             status: status.as_u16(),
             problem_type: None,
@@ -271,6 +292,7 @@ impl Api {
     }
 }
 
+// TODO: change this to generic
 fn login_data_json_body() -> impl Filter<Extract = (LoginData,), Error = warp::Rejection> + Clone {
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }

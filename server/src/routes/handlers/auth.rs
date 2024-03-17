@@ -62,12 +62,17 @@ pub async fn login(
                 .as_secs();
             if current_time > refresh_expire {
                 // delete expired session
-                let _result: Vec<Row> = conn
-                    .exec(
-                        "DELETE FROM session WHERE session = :session",
-                        params! {"session" => session},
-                    )
-                    .unwrap();
+                conn.exec::<Row, _, _>(
+                    "DELETE FROM session WHERE session = :session",
+                    params! {"session" => session.clone()},
+                )
+                // delete associated chat_tokens
+                .unwrap();
+                conn.exec::<Row, _, _>(
+                    "DELETE FROM chat_token WHERE session = :session",
+                    params! {"session" => session},
+                )
+                .unwrap();
             }
         }
     }
@@ -129,7 +134,7 @@ pub async fn refresh(
     let mut conn = database.pool.get_conn().unwrap();
     let result: Vec<Row> = conn
         .exec(
-            "SELECT id, is_remember, refresh_expire FROM login WHERE refresh_token = :refresh_token",
+            "SELECT id, session, is_remember, refresh_expire FROM login WHERE refresh_token = :refresh_token",
             params! {"refresh_token" => refresh_token.clone()},
         )
         .unwrap();
@@ -137,7 +142,7 @@ pub async fn refresh(
         return Err(warp::reject::custom(ApiError::NotAuthorized));
     }
 
-    let (id, is_remember, refresh_expire): (String, bool, u64) = mysql::from_row(result[0].clone());
+    let (id, old_session, is_remember, refresh_expire): (String, String, bool, u64) = mysql::from_row(result[0].clone());
 
     // Delete old session regardless of validity
     conn.exec::<Row, _, _>(
@@ -190,6 +195,14 @@ pub async fn refresh(
             "expire" => expire,
             "refresh_token" => refresh_token.clone(),
             "refresh_expire" => refresh_expire
+        },
+    )
+    .unwrap();
+    conn.exec::<Row, _, _>(
+        "UPDATE chat_token SET session=:new WHERE sesssion=:old",
+        params! {
+            "new" => session.clone(),
+            "old" => old_session,
         },
     )
     .unwrap();
