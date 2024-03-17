@@ -98,8 +98,8 @@ pub async fn ws(
                 username: username.clone(),
                 msg: msg.to_str().unwrap().to_owned(),
             };
-            for (from_id, connection) in connections.read().await.iter() {
-                if token_info.id.to_string() == *from_id {
+            for (from_token, connection) in connections.read().await.iter() {
+                if token_info.token == *from_token {
                     continue;
                 }
                 connection.send(token_info.channel, &new_msg);
