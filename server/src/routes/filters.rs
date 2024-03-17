@@ -19,6 +19,12 @@ pub struct RefreshData {
     pub refresh_token: String,
 }
 
+#[derive(Clone, Deserialize)]
+pub struct SignupData {
+    pub username: String,
+    pub pw: String,
+}
+
 #[derive(Serialize)]
 struct RejectionDetails {
     title: String,
@@ -28,6 +34,7 @@ struct RejectionDetails {
 #[derive(Debug)]
 pub enum ApiError {
     NotAuthorized,
+    NotProcessable,
 }
 
 impl warp::reject::Reject for ApiError {}
@@ -78,7 +85,13 @@ impl Api {
             .and(self.with_db())
             .and_then(handlers::auth::refresh);
 
-        prefix.and(login.or(refresh))
+        let signup = warp::path("signup")
+            .and(warp::post())
+            .and(signup_data_json_body())
+            .and(self.with_db())
+            .and_then(handlers::auth::signup);
+        
+        prefix.and(login.or(refresh).or(signup))
     }
 
     pub async fn handle_rejection(
@@ -131,5 +144,9 @@ fn login_data_json_body() -> impl Filter<Extract = (LoginData,), Error = warp::R
 
 fn refresh_data_json_body() -> impl Filter<Extract = (RefreshData,), Error = warp::Rejection> + Clone
 {
+    warp::body::content_length_limit(1024 * 16).and(warp::body::json())
+}
+
+fn signup_data_json_body() -> impl Filter<Extract = (SignupData,), Error = warp::Rejection> + Clone {
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }

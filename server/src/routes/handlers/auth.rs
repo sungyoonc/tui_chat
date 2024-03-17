@@ -182,3 +182,37 @@ pub async fn refresh(
     };
     return Ok(warp::reply::json(&response));
 }
+
+pub async fn signup(
+    json_data: SignupData,
+    database: Database,
+) -> Result<impl warp::Reply, Rejection> {
+    let username = json_data.clone().username;
+    let pw = json_data.pw;
+
+    // check if username is already in the database 
+    let mut conn = database.pool.get_conn().unwrap();
+    let result: Vec<Row> = conn
+        .exec(
+            "SELECT id FROM login WHERE username = :username",
+            params! {"username" => username.clone()},
+        )
+        .unwrap();
+    if !result.is_empty() {
+        return Err(warp::reject::custom(ApiError::NotProcessable));
+    }
+
+    // create salt and insert salt and pw to database
+    let mut key = OsRng.next_u64().to_le_bytes().to_vec();
+    let mut salt_source = username.clone().to_string().into_bytes();
+    salt_source.append(&mut key);
+    let salt = utils::hash_from_u8(salt_source);
+    let hashed_pw = utils::hash_from_string(format!("{}{}", pw, salt));
+    let _result: Vec<Row> = conn.exec(
+            "INSERT INTO login (salt, pw, username) VALUES (:salt, :pw, :username)",
+            params! {"salt" => salt, "pw" => hashed_pw, "username" => username}
+        )
+        .unwrap();
+
+    Ok(warp::reply())
+}

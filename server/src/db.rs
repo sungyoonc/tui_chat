@@ -28,7 +28,7 @@ impl Database {
         conn.exec::<Vec<_>, &str, ()>(
             "
         CREATE TABLE IF NOT EXISTS login (
-        id BIGINT UNSIGNED PRIMARY KEY,
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(32) UNIQUE KEY,
         pw VARCHAR(64),
         salt VARCHAR(64),
