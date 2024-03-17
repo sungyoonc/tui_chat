@@ -9,9 +9,9 @@ use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use warp::reject::Rejection;
 
-const SESSION_REMEMBER_EXPIRE_HOUR: u64 = 24 * 7;
-const SESSION_NO_REMEMBER_EXPIRE_MINUTE: u64 = 30;
-const REFRESHED_SESSION_EXPIRE_HOUR: u64 = 24 * 7;
+const SESSION_DEFAULT_EXPIRE_MINUTE: u64 = 30;
+const REFRESH_REMEMBER_EXPIRE_HOUR: u64 = 24 * 7;
+const REFRESH_NO_REMEMBER_EXPIRE_HOUR: u64 = 1;
 
 // response format
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
@@ -46,21 +46,21 @@ pub async fn login(
         return Err(warp::reject::custom(ApiError::NotAuthorized));
     }
 
-    // check if user has expired session
+    // cleanup expired sessions
     let result: Vec<Row> = conn
         .exec(
-            "SELECT session, expire FROM session WHERE id = :id",
+            "SELECT session, refresh_expire FROM session WHERE id = :id",
             params! {"id" => id},
         )
         .unwrap();
     if result.is_empty() {
         for row in result {
-            let (session, expire): (String, u64) = mysql::from_row(row);
+            let (session, refresh_expire): (String, u64) = mysql::from_row(row);
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            if current_time > expire {
+            if current_time > refresh_expire {
                 // delete expired session
                 let _result: Vec<Row> = conn
                     .exec(
@@ -77,44 +77,39 @@ pub async fn login(
     let mut session_source = id.clone().to_string().into_bytes();
     session_source.append(&mut key);
     let session = utils::hash_from_u8(session_source);
-    // make expire time
-    let expire = match json_data.remember {
-        true => {
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                + 60 * 60 * SESSION_REMEMBER_EXPIRE_HOUR
-        }
-        false => {
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                + 60 * SESSION_NO_REMEMBER_EXPIRE_MINUTE
-        }
-    };
-    // insert session to the session table
-    let _result: Vec<Row> = conn
-        .exec(
-            "INSERT INTO session (id, session, expire) VALUES (:id, :session, :expire)",
-            params! {"id" => id, "session" => session.clone(), "expire" => expire},
-        )
-        .unwrap();
-
     // make refresh_toke by hashing random number and id
     let mut key = OsRng.next_u64().to_le_bytes().to_vec();
     let mut refresh_token_source = id.clone().to_string().into_bytes();
     refresh_token_source.append(&mut key);
     let refresh_token = utils::hash_from_u8(refresh_token_source);
-
-    // insert refresh_token to the login table
-    let _result: Vec<Row> = conn
-        .exec(
-            "UPDATE login SET refresh_token = :refresh_token WHERE id = :id",
-            params! {"refresh_token" => refresh_token.clone(), "id" => id},
-        )
-        .unwrap();
+    // make normal and refresh expire time
+    let expire = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 60 * SESSION_DEFAULT_EXPIRE_MINUTE;
+    let refresh_expire = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + match json_data.remember {
+            true => 60 * 60 * REFRESH_REMEMBER_EXPIRE_HOUR,
+            false => 60 * 60 * REFRESH_NO_REMEMBER_EXPIRE_HOUR,
+        };
+    // insert session to the session table
+    conn.exec::<Row, _, _>(
+        "INSERT INTO session (session, id, is_remember, expire, refresh_token, refresh_expire)
+        VALUES (:session, :id, :is_remember :expire, :refresh_token :refresh_expire)",
+        params! {
+            "id" => id,
+            "session" => session.clone(),
+            "is_remember" => json_data.remember,
+            "expire" => expire,
+            "refresh_token" => refresh_token.clone(),
+            "refresh_expire" => refresh_expire
+        },
+    )
+    .unwrap();
 
     // response
     let response = ResponseData {
@@ -134,46 +129,70 @@ pub async fn refresh(
     let mut conn = database.pool.get_conn().unwrap();
     let result: Vec<Row> = conn
         .exec(
-            "SELECT id FROM login WHERE refresh_token = :refresh_token",
-            params! {"refresh_token" => refresh_token},
+            "SELECT id, is_remember, refresh_expire FROM login WHERE refresh_token = :refresh_token",
+            params! {"refresh_token" => refresh_token.clone()},
         )
         .unwrap();
     if result.is_empty() {
         return Err(warp::reject::custom(ApiError::NotAuthorized));
     }
 
+    let (id, is_remember, refresh_expire): (String, bool, u64) = mysql::from_row(result[0].clone());
+
+    // Delete old session regardless of validity
+    conn.exec::<Row, _, _>(
+        "DELETE FROM session WHERE refresh_token = :refresh_token",
+        params! {"refresh_token" => refresh_token},
+    )
+    .unwrap();
+
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    if current_time > refresh_expire {
+        return Err(warp::reject::custom(ApiError::NotAuthorized));
+    }
+
     // make session by hashing random number and id
     let mut key = OsRng.next_u64().to_le_bytes().to_vec();
-    let id: String = mysql::from_row(result[0].clone());
     let mut session_source = id.clone().into_bytes();
     session_source.append(&mut key);
     let session = utils::hash_from_u8(session_source);
-    // make expire
+    // make refresh_toke by hashing random number and id
+    let mut key = OsRng.next_u64().to_le_bytes().to_vec();
+    let mut refresh_token_source = id.clone().to_string().into_bytes();
+    refresh_token_source.append(&mut key);
+    let refresh_token = utils::hash_from_u8(refresh_token_source);
+    // make normal and refresh expire time
     let expire = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs()
-        + REFRESHED_SESSION_EXPIRE_HOUR * 3600;
-    // insert new session to session table
-    let _result: Vec<Row> = conn
-        .exec(
-            "INSERT INTO session (id, session, expire) VALUES (:id, :session, :expire)",
-            params! {"id" => id.clone(), "session" => session.clone(), "expire" => expire},
-        )
-        .unwrap();
-
-    // update used refresh token to new refresh token
-    let mut key = OsRng.next_u64().to_le_bytes().to_vec();
-    let mut refresh_token_source = id.clone().into_bytes();
-    refresh_token_source.append(&mut key);
-    let refresh_token = utils::hash_from_u8(refresh_token_source);
-
-    let _result: Vec<Row> = conn
-        .exec(
-            "UPDATE login SET refresh_token = :refresh_token WHERE id = :id",
-            params! {"refresh_token" => refresh_token.clone(), "id" => id},
-        )
-        .unwrap();
+        + 60 * SESSION_DEFAULT_EXPIRE_MINUTE;
+    let refresh_expire = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + match is_remember {
+            true => 60 * 60 * REFRESH_REMEMBER_EXPIRE_HOUR,
+            false => 60 * 60 * REFRESH_NO_REMEMBER_EXPIRE_HOUR,
+        };
+    // insert session to the session table
+    conn.exec::<Row, _, _>(
+        "INSERT INTO session (session, id, is_remember, expire, refresh_token, refresh_expire)
+        VALUES (:session, :id, :is_remember :expire, :refresh_token :refresh_expire)",
+        params! {
+            "id" => id,
+            "session" => session.clone(),
+            "is_remember" => is_remember,
+            "expire" => expire,
+            "refresh_token" => refresh_token.clone(),
+            "refresh_expire" => refresh_expire
+        },
+    )
+    .unwrap();
 
     // reponse
     let response = ResponseData {

@@ -31,17 +31,19 @@ impl Database {
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(32) UNIQUE KEY,
         pw VARCHAR(64),
-        salt VARCHAR(64),
-        refresh_token VARCHAR(64));",
+        salt VARCHAR(64));",
             (),
         )
         .unwrap();
         conn.exec::<Vec<_>, &str, ()>(
             "
         CREATE TABLE IF NOT EXISTS session (
+        session VARCHAR(64) PRIMARY KEY,
         id BIGINT UNSIGNED,
-        session VARCHAR(64),
-        expire BIGINT UNSIGNED)",
+        is_remember BOOLEAN,
+        expire BIGINT UNSIGNED,
+        refresh_token VARCHAR(64) UNIQUE KEY,
+        refresh_expire BIGINT UNSIGNED);",
             (),
         )
         .unwrap();
@@ -51,7 +53,7 @@ impl Database {
         let mut conn = self.pool.get_conn().unwrap();
         let result: Vec<Row> = conn
             .exec(
-                "SELECT id, expire FROM session WHERE session = :session",
+                "SELECT id, expire, refresh_expire FROM session WHERE session = :session",
                 params! {"session" => session.clone()},
             )
             .unwrap();
@@ -62,19 +64,20 @@ impl Database {
         }
 
         // check if session is vaild
-        let (id, expire): (u64, u64) = mysql::from_row(result[0].clone());
+        let (id, expire, refresh_expire): (u64, u64, u64) = mysql::from_row(result[0].clone());
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
         if current_time > expire {
             // delete expired session
-            let _result: Vec<Row> = conn
-                .exec(
+            if current_time > refresh_expire {
+                conn.exec::<Row, _, _>(
                     "DELETE FROM session WHERE session = :session",
                     params! {"session" => session},
                 )
                 .unwrap();
+            }
             return None;
         }
 
