@@ -23,7 +23,7 @@ async fn main() {
         settings.clone(),
     );
 
-    let server_task = tokio::spawn(server);
+    let server_task = tokio::spawn(server.await);
 
     // When SIGTERM or Ctrl-C is received, shutdown the server
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).unwrap();

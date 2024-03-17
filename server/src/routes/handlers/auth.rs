@@ -218,7 +218,13 @@ pub async fn signup(
         )
         .unwrap();
     if !result.is_empty() {
-        return Err(warp::reject::custom(ApiError::NotProcessable));
+        let invalid_params_vec: Vec<InvalidParamsDetail> = vec![InvalidParamsDetail {
+            name: "username".to_string(),
+            reason: "username already taken".to_string(),
+        }];
+        return Err(warp::reject::custom(ApiError::NotProcessable(
+            invalid_params_vec,
+        )));
     }
 
     // create salt and insert salt and pw to database

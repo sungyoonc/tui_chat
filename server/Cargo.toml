@@ -13,6 +13,7 @@ name = "tui-chat-server"
 
 [dependencies]
 config = "0.14"
+futures-util = "0.3"
 mysql = "24.0.0"
 rand_core = "0.6.4"
 serde = { version = "1.0.197", features = ["derive"] }

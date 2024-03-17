@@ -27,5 +27,5 @@ pub async fn spawn_server() -> (
         settings.clone(),
     );
 
-    (tokio::spawn(server), address, cancel_token)
+    (tokio::spawn(server.await), address, cancel_token)
 }

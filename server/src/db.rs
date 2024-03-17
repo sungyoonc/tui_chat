@@ -83,4 +83,22 @@ impl Database {
 
         return Some(id);
     }
+
+    pub async fn get_username(&self, id: u64) -> Option<String> {
+        let mut conn = self.pool.get_conn().unwrap();
+        let result: Vec<Row> = conn
+            .exec(
+                r"SELECT username FROM login WHERE id = :id",
+                params! {"id" => id},
+            )
+            .unwrap();
+
+        if result.is_empty() {
+            return None;
+        }
+
+        let username: String = mysql::from_row(result[0].clone());
+
+        Some(username)
+    }
 }
