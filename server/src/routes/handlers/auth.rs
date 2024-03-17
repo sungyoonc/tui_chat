@@ -91,7 +91,7 @@ pub async fn login(
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
-                + 60 * 60 * SESSION_NO_REMEMBER_EXPIRE_MINUTE
+                + 60 * SESSION_NO_REMEMBER_EXPIRE_MINUTE
         }
     };
     // insert session to the session table
