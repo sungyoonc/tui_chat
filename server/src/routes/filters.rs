@@ -47,9 +47,7 @@ impl Api {
     pub fn new(settings: Settings) -> Self {
         let database = Database::new(&settings.database);
         database.db_setup();
-        Self {
-            database,
-        }
+        Self { database }
     }
 
     pub fn routes(
@@ -90,7 +88,7 @@ impl Api {
             .and(signup_data_json_body())
             .and(self.with_db())
             .and_then(handlers::auth::signup);
-        
+
         prefix.and(login.or(refresh).or(signup))
     }
 
@@ -147,6 +145,7 @@ fn refresh_data_json_body() -> impl Filter<Extract = (RefreshData,), Error = war
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }
 
-fn signup_data_json_body() -> impl Filter<Extract = (SignupData,), Error = warp::Rejection> + Clone {
+fn signup_data_json_body() -> impl Filter<Extract = (SignupData,), Error = warp::Rejection> + Clone
+{
     warp::body::content_length_limit(1024 * 16).and(warp::body::json())
 }

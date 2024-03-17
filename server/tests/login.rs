@@ -1,5 +1,5 @@
-use test_util::spawn_server;
 use serde::Serialize;
+use test_util::spawn_server;
 
 #[derive(Serialize)]
 pub struct LoginData {

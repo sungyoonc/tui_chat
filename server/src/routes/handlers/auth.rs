@@ -190,7 +190,7 @@ pub async fn signup(
     let username = json_data.clone().username;
     let pw = json_data.pw;
 
-    // check if username is already in the database 
+    // check if username is already in the database
     let mut conn = database.pool.get_conn().unwrap();
     let result: Vec<Row> = conn
         .exec(
@@ -208,9 +208,10 @@ pub async fn signup(
     salt_source.append(&mut key);
     let salt = utils::hash_from_u8(salt_source);
     let hashed_pw = utils::hash_from_string(format!("{}{}", pw, salt));
-    let _result: Vec<Row> = conn.exec(
+    let _result: Vec<Row> = conn
+        .exec(
             "INSERT INTO login (salt, pw, username) VALUES (:salt, :pw, :username)",
-            params! {"salt" => salt, "pw" => hashed_pw, "username" => username}
+            params! {"salt" => salt, "pw" => hashed_pw, "username" => username},
         )
         .unwrap();
 
