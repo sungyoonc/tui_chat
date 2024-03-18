@@ -59,6 +59,24 @@ impl Database {
             (),
         )
         .unwrap();
+        conn.exec::<Vec<_>, &str, ()>(
+            "
+        CREATE TABLE IF NOT EXISTS server (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(32) NOT NULL,
+        public BOOL NOT NULL,
+        invite_code VARCHAR(8))",
+            (),
+        )
+        .unwrap();
+        conn.exec::<Vec<_>, &str, ()>(
+            "
+        CREATE TABLE IF NOT EXISTS user_server_relationship (
+        server_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL)",
+            (),
+        )
+        .unwrap();
     }
 
     pub async fn check_session(&self, session: String) -> Option<u64> {

@@ -16,7 +16,7 @@ pub struct LoginData {
     pub remember: bool,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize)]
 pub struct RefreshData {
     pub refresh_token: String,
 }
@@ -30,6 +30,39 @@ pub struct SignupData {
 #[derive(Clone, Deserialize)]
 pub struct LogoutData {
     pub session: String,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ServerJoinData {
+    pub invite_code: String,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ServerSearchData {
+    pub query: String,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ServerInviteData {
+    pub id: u64,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ServerCreateData {
+    pub name: String,
+    pub public: bool,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ServerDeleteData {
+    pub id: u64,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ServerModifyData {
+    pub id: u64,
+    pub name: String,
+    pub public: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -100,6 +133,7 @@ impl Api {
         self.health_check()
             .or(self.auth())
             .or(self.chat().await)
+            .or(self.server().await)
             .recover(Self::handle_rejection)
     }
 
@@ -201,6 +235,60 @@ impl Api {
                 },
             );
         prefix.and(ws.or(token))
+    }
+
+    pub async fn server(
+        &self,
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+        let prefix = warp::path("server");
+        let sub_prefix = warp::path("manage");
+
+        let join = warp::path("join")
+            .and(warp::post())
+            .and(self.ensure_authentication().await)
+            .and(json_body::<ServerJoinData>())
+            .and(self.with_db())
+            .and_then(handlers::server::join);
+
+        let search = warp::path("search")
+            .and(warp::post())
+            .and(json_body::<ServerSearchData>())
+            .and(self.with_db())
+            .and_then(handlers::server::search);
+
+        let get_invite_code = warp::path("get_invite_code")
+            .and(warp::post())
+            .and(self.ensure_authentication().await)
+            .and(json_body::<ServerInviteData>())
+            .and(self.with_db())
+            .and_then(handlers::server::get_invite_code);
+
+        let create = warp::path("create")
+            .and(warp::post())
+            .and(self.ensure_authentication().await)
+            .and(json_body::<ServerCreateData>())
+            .and(self.with_db())
+            .and_then(handlers::server::create);
+
+        let delete = warp::path("delete")
+            .and(warp::post())
+            .and(self.ensure_authentication().await)
+            .and(json_body::<ServerDeleteData>())
+            .and(self.with_db())
+            .and_then(handlers::server::delete);
+
+        let modify = warp::path("modify")
+            .and(warp::post())
+            .and(self.ensure_authentication().await)
+            .and(json_body::<ServerModifyData>())
+            .and(self.with_db())
+            .and_then(handlers::server::modify);
+
+        prefix.and(
+            join.or(search)
+                .or(get_invite_code)
+                .or(sub_prefix.and(create.or(delete).or(modify))),
+        )
     }
 
     pub async fn ensure_authentication(

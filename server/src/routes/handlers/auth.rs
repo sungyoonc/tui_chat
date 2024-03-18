@@ -14,7 +14,7 @@ const REFRESH_REMEMBER_EXPIRE_HOUR: u64 = 24 * 7;
 const REFRESH_NO_REMEMBER_EXPIRE_HOUR: u64 = 1;
 
 // response format
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize)]
+#[derive(Serialize)]
 pub struct ResponseData {
     session: String,
     refresh_token: String,
@@ -240,10 +240,10 @@ pub async fn signup(
     let salt = utils::hash_from_u8(salt_source);
     let hashed_pw = utils::hash_from_string(format!("{}{}", pw, salt));
     conn.exec::<Row, _, _>(
-            "INSERT INTO login (salt, pw, username) VALUES (:salt, :pw, :username)",
-            params! {"salt" => salt, "pw" => hashed_pw, "username" => username},
-        )
-        .unwrap();
+        "INSERT INTO login (salt, pw, username) VALUES (:salt, :pw, :username)",
+        params! {"salt" => salt, "pw" => hashed_pw, "username" => username},
+    )
+    .unwrap();
 
     Ok(warp::reply())
 }
