@@ -52,7 +52,7 @@ pub async fn join(
     // add authority info to user_server_relationship table
     let server_id: u64 = mysql::from_row(result[0].clone());
     conn.exec::<Row, _, _>(
-        "INSERT INTO
+        "INSERT IGNORE INTO
         user_server_relationship (server_id, user_id)
         VALUES (:server_id, :user_id)",
         params! {
