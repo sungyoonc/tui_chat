@@ -1,0 +1,28 @@
+.NaviBar {
+  display: flex;
+  justify-content: space-between;
+  background-color: gray;
+}
+
+.LogoLink {
+  width: 70px;
+  height: 70px;
+}
+
+.SignupText {
+  font-family:'Malgun Gothic';
+  font-weight: bold;
+  font-size: large;
+}
+
+.Logo {
+  padding: 10px 0 0 30px;
+}
+
+.Signup {
+
+}
+
+.LogoSvg {
+  height: 70px;
+}
