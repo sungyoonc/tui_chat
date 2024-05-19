@@ -6,8 +6,6 @@ use mysql::{params, prelude::Queryable, Row};
 use serde::Serialize;
 use warp::reject::Rejection;
 
-const INVITE_CODE_SEED: u128 = 3452;
-
 #[derive(Serialize)]
 pub struct InviteCodeData {
     invite_code: String,
@@ -181,8 +179,12 @@ pub async fn create(
     )
     .unwrap();
 
+    // get invite code seed
+    let result: Vec<Row> = conn.exec("SELECT seed FROM config", ()).unwrap();
+    let seed: u64 = mysql::from_row(result[0].clone());
+
     // update invite code
-    let generator = BlockId::new(Alphabet::alphanumeric(), INVITE_CODE_SEED, 8);
+    let generator = BlockId::new(Alphabet::alphanumeric(), seed as u128, 8);
     let invite_code = generator.encode_string(server_id).unwrap();
     conn.exec::<Row, _, _>(
         "UPDATE server SET invite_code = :invite_code WHERE id = :id",

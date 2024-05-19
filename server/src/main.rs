@@ -25,12 +25,27 @@ async fn main() {
 
     let server_task = tokio::spawn(server.await);
 
-    // When SIGTERM or Ctrl-C is received, shutdown the server
-    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).unwrap();
-    tokio::select! {
-        _ = sigterm.recv() => {},
-        _ = signal::ctrl_c() => {},
+    #[cfg(target_os = "linux")]
+    {
+        // When SIGTERM or Ctrl-C is received, shutdown the server
+        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).unwrap();
+        tokio::select! {
+            _ = sigterm.recv() => {},
+            _ = signal::ctrl_c() => {},
+        }
+        tokio::select! {
+            _ = signal::ctrl_c() => {},
+        }
     }
+
+    #[cfg(target_os = "windows")]
+    {
+        // When Ctrl-C is received, shutdown the server
+        tokio::select! {
+            _ = signal::ctrl_c() => {},
+        }
+    }
+
     eprintln!("Shutting Down.");
     cancel_token.cancel();
     server_task.await.unwrap();

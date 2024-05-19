@@ -77,6 +77,13 @@ impl Database {
             (),
         )
         .unwrap();
+        conn.exec::<Vec<_>, &str, ()>(
+            "
+        CREATE TABLE IF NOT EXISTS config (
+        invite_code_seed BIGINT UNSIGNED NOT NULL",
+            (),
+        )
+        .unwrap();
     }
 
     pub async fn check_session(&self, session: String) -> Option<u64> {
